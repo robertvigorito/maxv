@@ -1,7 +1,7 @@
 import AssetBubble from './AssetBubble';
 import FolderPicker from './FolderPicker';
 
-export default function AssetGrid({ assets, onSelect, onOpen, onContextMenu, selectedIds, query, loading, onScanComplete, thumbnailSize = 200, groupBy = 'none', indexById = new Map() }) {
+export default function AssetGrid({ assets, onSelect, onOpen, onContextMenu, selectedIds, query, loading, onScanComplete, thumbnailSize = 200, thumbnailWidth = 200, groupBy = 'none', indexById = new Map() }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -20,20 +20,21 @@ export default function AssetGrid({ assets, onSelect, onOpen, onContextMenu, sel
       <AssetBubble
         key={asset._id}
         asset={asset}
-        onClick={(event) => onSelect(asset._id, index, event.shiftKey)}
+        onClick={(event) => onSelect(asset._id, index, event.shiftKey, event.altKey)}
         onOpen={() => onOpen(index)}
         onContextMenu={onContextMenu}
         selected={selectedIds.has(asset._id)}
         query={query}
         size={thumbnailSize}
+        dragIds={selectedIds.has(asset._id) ? [...selectedIds] : [asset._id]}
       />
     );
   };
 
   const grid = (items) => (
     <div
-      className="grid gap-6"
-      style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${thumbnailSize}px, 1fr))` }}
+      className="grid gap-6 transition-[grid-template-columns] duration-150"
+      style={{ gridTemplateColumns: `repeat(auto-fill, ${thumbnailWidth}px)` }}
     >
       {items.map(renderBubble)}
     </div>

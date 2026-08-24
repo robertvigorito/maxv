@@ -2,8 +2,10 @@
 
 import logging
 import re
+import shutil
 from datetime import datetime
 from fnmatch import translate
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from bson import ObjectId
@@ -137,6 +139,108 @@ class AssetService:
         except Exception as e:
             logger.error(f"Error deleting asset {asset_id}: {e}")
             return False
+
+    def delete_assets_db_only(self, asset_ids: List[str]) -> int:
+        """Delete assets from the database only, leaving files on disk."""
+        try:
+            object_ids = [ObjectId(asset_id) for asset_id in asset_ids]
+        except Exception as e:
+            logger.error(f"Invalid asset ID while deleting: {e}")
+            return 0
+
+        if not object_ids:
+            return 0
+
+        result = self.collection.delete_many({"_id": {"$in": object_ids}})
+        return result.deleted_count
+
+    @staticmethod
+    def _move_to_trash(path: str) -> bool:
+        """Send a file to the OS trash/recycle bin, falling back to a local trash folder."""
+        try:
+            from send2trash import send2trash
+
+            send2trash(path)
+            return True
+        except Exception:
+            # Fallback (e.g. Linux/WSL without a desktop trash backend):
+            # move into a local trash folder so the file is removed but recoverable.
+            try:
+                from backend.app.config import settings
+
+                trash_dir = settings.cache_path / "trash"
+                trash_dir.mkdir(parents=True, exist_ok=True)
+
+                source = Path(path)
+                if not source.exists():
+                    return False
+
+                dest = trash_dir / source.name
+                counter = 1
+                while dest.exists():
+                    dest = trash_dir / f"{source.stem}_{counter}{source.suffix}"
+                    counter += 1
+
+                shutil.move(str(source), str(dest))
+                logger.info(f"Moved {path} to local trash: {dest}")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to send {path} to trash: {e}")
+                return False
+
+    def delete_assets(self, asset_ids: List[str]) -> int:
+        """Delete assets from the database and send their files to the trash."""
+        try:
+            object_ids = [ObjectId(asset_id) for asset_id in asset_ids]
+        except Exception as e:
+            logger.error(f"Invalid asset ID while deleting: {e}")
+            return 0
+
+        if not object_ids:
+            return 0
+
+        # Collect file paths before deleting the records
+        files_to_delete = []
+        for doc in self.collection.find({"_id": {"$in": object_ids}}, {"path": 1}):
+            if doc.get("path"):
+                files_to_delete.append(doc["path"])
+
+        result = self.collection.delete_many({"_id": {"$in": object_ids}})
+
+        # Send files to trash (recycle bin)
+        for path in files_to_delete:
+            file_path = Path(path).resolve()
+            if file_path.exists() and file_path.is_file():
+                self._move_to_trash(str(file_path))
+
+        return result.deleted_count
+
+    def delete_assets_by_path(self, path: str) -> int:
+        """Delete assets matching a file path (or under a directory), sending files to trash."""
+        target = Path(path).resolve()
+        pattern = re.escape(str(target))
+        query = {
+            "$or": [
+                {"path": str(target)},
+                {"path": {"$regex": f"^{pattern}(/|\\\\)"}},
+            ]
+        }
+        docs = list(self.collection.find(query, {"path": 1}))
+        if not docs:
+            return 0
+
+        paths = [doc["path"] for doc in docs if doc.get("path")]
+        result = self.collection.delete_many({"_id": {"$in": [doc["_id"] for doc in docs]}})
+
+        if target.is_dir():
+            self._move_to_trash(str(target))
+        else:
+            for p in paths:
+                file_path = Path(p).resolve()
+                if file_path.exists() and file_path.is_file():
+                    self._move_to_trash(str(file_path))
+
+        return result.deleted_count
 
     def add_tags(self, asset_ids: List[str], tags: List[str]) -> int:
         """Add tags to multiple assets without removing existing tags."""

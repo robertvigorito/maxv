@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 
-export default function QuickTagMenu({ position, onClose, onAppend, onRemove, onNew, onClearAll }) {
+export default function QuickTagMenu({ position, onClose, onAppend, onRemove, onNew, onClearAll, onDelete, onOpenInExplorer, onCopy, onShowInMediaBin, onSendToBin }) {
+  const [copyOpen, setCopyOpen] = useState(false);
   const [tags, setTags] = useState([]);
   const [tagsOpen, setTagsOpen] = useState(false);
   const [openAction, setOpenAction] = useState(null);
@@ -132,6 +133,72 @@ export default function QuickTagMenu({ position, onClose, onAppend, onRemove, on
           </div>
         )}
       </div>
+      <div className="mt-1 border-t border-gray-700/70" />
+      <div className="relative" onMouseEnter={() => setCopyOpen(true)}>
+        <button
+          type="button"
+          role="menuitem"
+          className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white"
+        >
+          <span>Copy</span>
+          <span className="ml-6 text-gray-500">›</span>
+        </button>
+        {copyOpen && (
+          <div className="absolute left-full top-0 ml-1 min-w-36 overflow-hidden rounded-lg border border-gray-700 bg-gray-900 py-1 shadow-2xl" role="menu">
+            {[['path', 'Path'], ['directory', 'Directory'], ['tags', 'Tags'], ['size', 'Size']].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                role="menuitem"
+                onClick={() => onCopy(key)}
+                className="block w-full px-4 py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={onSendToBin}
+        className="flex w-full items-center px-4 py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white"
+      >
+        Send to bin
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={onShowInMediaBin}
+        className="flex w-full items-center px-4 py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white"
+      >
+        Show in media bin
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={onOpenInExplorer}
+        className="flex w-full items-center px-4 py-2 text-left text-sm text-gray-200 hover:bg-gray-800 hover:text-white"
+      >
+        Open in Explorer
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => onDelete(false)}
+        className="flex w-full items-center px-4 py-2 text-left text-sm text-red-300 hover:bg-red-500/15 hover:text-red-200"
+      >
+        Delete
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => onDelete(true)}
+        className="flex w-full items-center px-4 py-2 text-left text-sm text-red-300 hover:bg-red-500/15 hover:text-red-200"
+      >
+        Delete Disk
+      </button>
     </div>
   );
 }

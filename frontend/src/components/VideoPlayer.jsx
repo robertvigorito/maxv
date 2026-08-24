@@ -16,11 +16,15 @@ export default function VideoPlayer({ asset }) {
           videoRef.current.pause();
         }
       }
+
+      if ((e.key === 'm' || e.key === 'M') && videoRef.current) {
+        setMuted((value) => !value);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [setMuted]);
 
   return (
     <div className="max-w-full max-h-full flex items-center justify-center">

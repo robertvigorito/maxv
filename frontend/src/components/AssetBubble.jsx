@@ -1,6 +1,47 @@
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 
-export default function AssetBubble({ asset, onClick, onOpen, onContextMenu, selected = false, query = '', size = 200 }) {
+export default function AssetBubble({ asset, onClick, onOpen, onContextMenu, selected = false, query = '', size = 200, dragIds = [] }) {
+  const videoRef = useRef(null);
+  const pendingRatioRef = useRef(null);
+  const rafRef = useRef(null);
+  const [hovering, setHovering] = useState(false);
+  const showVideoPreview = asset.type === 'video' && hovering;
+
+  useEffect(() => () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  const handleMouseLeave = () => {
+    setHovering(false);
+    pendingRatioRef.current = null;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  };
+
+  const handleMouseMove = (event) => {
+    if (!showVideoPreview || !videoRef.current) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    pendingRatioRef.current = ratio;
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const video = videoRef.current;
+      if (pendingRatioRef.current == null || !video) return;
+      const duration = video.duration || 0;
+      if (!duration) return;
+      const target = pendingRatioRef.current * duration;
+      // Skip redundant seeks when the change is negligible to avoid jank.
+      if (Math.abs(target - video.currentTime) < 0.05) return;
+      if (typeof video.fastSeek === 'function') video.fastSeek(target);
+      else video.currentTime = target;
+    });
+  };
   const formatDuration = (seconds) => {
     if (!seconds) return '';
     const mins = Math.floor(seconds / 60);
@@ -32,6 +73,20 @@ export default function AssetBubble({ asset, onClick, onOpen, onContextMenu, sel
       onClick={onClick}
       onDoubleClick={onOpen}
       onContextMenu={(event) => onContextMenu(event, asset._id)}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={handleMouseLeave}
+      draggable
+      onDragStart={(event) => {
+        const ids = dragIds.length ? dragIds : [asset._id];
+        event.dataTransfer.setData('application/x-maxv-asset', JSON.stringify({ ids }));
+        // Carry the full local file path under the asset's MIME type so external
+        // drop targets receive the path when they read that mime type.
+        if (asset.path) {
+          event.dataTransfer.setData(asset.mime || 'application/octet-stream', asset.path);
+          event.dataTransfer.setData('text/plain', asset.path);
+        }
+        event.dataTransfer.effectAllowed = 'copy';
+      }}
       role="button"
       tabIndex={0}
       onKeyDown={(event) => {
@@ -42,14 +97,28 @@ export default function AssetBubble({ asset, onClick, onOpen, onContextMenu, sel
       }}
       className="group cursor-pointer"
     >
-      {/* Square thumbnail with rounded corners */}
-      <div className={`relative aspect-square rounded-lg overflow-hidden border-2 bg-gray-900 transition-all duration-300 hover:border-purple-500 hover:scale-105 hover:shadow-xl hover:shadow-purple-500/20 ${selected ? 'border-purple-500 ring-2 ring-purple-500/40' : 'border-gray-800'}`}>
+      {/* Thumbnail with fixed height, width controlled by grid column */}
+      <div
+        onMouseMove={handleMouseMove}
+        className={`relative w-full overflow-hidden rounded-lg border-2 bg-gray-900 transition-all duration-300 hover:border-purple-500 hover:scale-105 hover:shadow-xl hover:shadow-purple-500/20 ${selected ? 'border-purple-500 ring-2 ring-purple-500/40' : 'border-gray-800'}`}
+        style={{ height: size }}
+      >
         <img
           src={api.getThumbnailUrl(asset._id)}
           alt={asset.filename}
           loading="lazy"
           className="w-full h-full object-cover"
         />
+        {showVideoPreview && (
+          <video
+            ref={videoRef}
+            src={api.getFileUrl(asset._id)}
+            muted
+            playsInline
+            preload="auto"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        )}
         {selected && <div className="pointer-events-none absolute inset-0 bg-black/60" aria-hidden="true" />}
         
         {/* Video duration badge */}

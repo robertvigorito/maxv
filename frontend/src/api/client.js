@@ -37,6 +37,20 @@ export const api = {
     return response.json();
   },
 
+  async refreshAll() {
+    const response = await fetch(`${API_BASE_URL}/api/index/refresh`, {
+      method: 'POST',
+    });
+    if (!response.ok) throw new Error('Failed to refresh media');
+    return response.json();
+  },
+
+  async scanStatus() {
+    const response = await fetch(`${API_BASE_URL}/api/index/status`);
+    if (!response.ok) throw new Error('Failed to get scan status');
+    return response.json();
+  },
+
   async fetchTags() {
     const response = await fetch(`${API_BASE_URL}/api/assets/tags`);
     if (!response.ok) throw new Error('Failed to fetch tags');
@@ -70,6 +84,44 @@ export const api = {
       body: JSON.stringify({ asset_ids: assetIds }),
     });
     if (!response.ok) throw new Error('Failed to clear tags');
+    return response.json();
+  },
+
+  async deleteAssetsByPath(path) {
+    const params = new URLSearchParams({ path });
+    const response = await fetch(`${API_BASE_URL}/api/assets/by-path?${params}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to delete by path');
+    return response.json();
+  },
+
+  async openFolder(path) {
+    const params = new URLSearchParams({ path });
+    const response = await fetch(`${API_BASE_URL}/api/index/open?${params}`, {
+      method: 'POST',
+    });
+    if (!response.ok) throw new Error('Failed to open folder');
+    return response.json();
+  },
+
+  async deleteAssets(assetIds, disk = false) {
+    const params = new URLSearchParams();
+    if (disk) params.append('disk', 'true');
+    const response = await fetch(`${API_BASE_URL}/api/assets?${params}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asset_ids: assetIds }),
+    });
+    if (!response.ok) throw new Error('Failed to delete assets');
+    return response.json();
+  },
+
+  async openInExplorer(assetId) {
+    const response = await fetch(`${API_BASE_URL}/api/assets/${assetId}/open`, {
+      method: 'POST',
+    });
+    if (!response.ok) throw new Error('Failed to open in explorer');
     return response.json();
   },
 

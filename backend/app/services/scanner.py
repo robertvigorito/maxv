@@ -101,7 +101,7 @@ class MediaScanner:
 
             # Create asset object
             asset = AssetCreate(
-                path=str(file_path.absolute()),
+                path=str(file_path.resolve()),
                 filename=file_path.name,
                 type=metadata["type"],
                 mime=metadata["mime"],
@@ -151,6 +151,7 @@ class MediaScanner:
         directory: Path,
         asset_service,
         recursive: bool = True,
+        progress_callback=None,
     ) -> Dict[str, int]:
         """Scan directory and index all media files."""
         stats = {
@@ -165,11 +166,15 @@ class MediaScanner:
         media_files = self.scan_directory(directory, recursive)
         stats["scanned"] = len(media_files)
 
+        total = len(media_files)
+        if progress_callback:
+            progress_callback(0, total, stats)
+
         # Track processed file paths
         processed_paths: Set[str] = set()
 
         # Process each file
-        for file_path in media_files:
+        for index, file_path in enumerate(media_files):
             try:
                 abs_path = str(file_path.absolute())
                 processed_paths.add(abs_path)
@@ -195,6 +200,9 @@ class MediaScanner:
                 else:
                     asset_service.create_asset(asset_data)
                     stats["indexed"] += 1
+
+                if progress_callback:
+                    progress_callback(index + 1, total, stats)
 
             except Exception as e:
                 logger.error(f"Error processing {file_path}: {e}")

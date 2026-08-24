@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 
+const KNOWN_COMMANDS = ['scan', 'add', 'index', 'refresh'];
+
 export default function CommandPrompt({ isOpen, onClose, onCommand }) {
   const [input, setInput] = useState('');
   const [history, setHistory] = useState([]);
@@ -23,26 +25,45 @@ export default function CommandPrompt({ isOpen, onClose, onCommand }) {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  const suggestions = input.trim()
+    ? [...new Set([...KNOWN_COMMANDS, ...history])]
+        .filter((candidate) => candidate.toLowerCase().startsWith(input.trim().toLowerCase()))
+        .slice(0, 8)
+    : [];
 
-    // Add to history
+  const inlineSuggestion = suggestions[0] || '';
+  const suffix = inlineSuggestion.toLowerCase().startsWith(input.trim().toLowerCase())
+    ? inlineSuggestion.slice(input.trim().length)
+    : '';
+
+  const acceptSuggestion = (value) => {
+    setInput(value);
+    inputRef.current?.focus();
+  };
+
+  const submit = () => {
+    if (!input.trim()) return;
     setHistory([input, ...history]);
     setHistoryIndex(-1);
-
-    // Parse and execute command
     const parts = input.trim().split(/\s+/);
     const command = parts[0].toLowerCase();
     const args = parts.slice(1);
-
     onCommand({ command, args, raw: input });
-
-    // Clear input
     setInput('');
   };
 
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    submit();
+  };
+
   const handleKeyDown = (e) => {
+    if (e.key === 'Tab' && suffix) {
+      e.preventDefault();
+      acceptSuggestion(inlineSuggestion);
+      return;
+    }
+
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (historyIndex < history.length - 1) {
@@ -85,15 +106,24 @@ export default function CommandPrompt({ isOpen, onClose, onCommand }) {
           <form onSubmit={handleSubmit}>
             <div className="flex items-center gap-2 bg-gray-950 border border-gray-700 rounded-lg px-4 py-3">
               <span className="text-purple-400 font-mono">❯</span>
-              <input
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="scan /path/to/media"
-                className="flex-1 bg-transparent text-gray-200 outline-none font-mono"
-              />
+              <div className="relative flex-1 font-mono">
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 whitespace-pre text-gray-200"
+                >
+                  {input}
+                  <span className="text-gray-600">{suffix}</span>
+                </span>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="scan /path/to/media"
+                  className="relative w-full bg-transparent text-transparent caret-purple-400 outline-none placeholder:text-gray-500"
+                />
+              </div>
             </div>
           </form>
 
@@ -103,8 +133,10 @@ export default function CommandPrompt({ isOpen, onClose, onCommand }) {
               <p><span className="text-purple-400">scan</span> <span className="text-gray-600">&lt;path&gt;</span> - Scan a folder for media files</p>
               <p><span className="text-purple-400">add</span> <span className="text-gray-600">&lt;path&gt;</span> - Same as scan</p>
               <p><span className="text-purple-400">index</span> <span className="text-gray-600">&lt;path&gt;</span> - Same as scan</p>
+              <p><span className="text-purple-400">refresh</span> - Re-scan the configured media path</p>
             </div>
             <div className="mt-3 text-xs text-gray-600">
+              <p>Press <kbd className="px-1 py-0.5 bg-gray-800 rounded">Tab</kbd> to accept inline completion</p>
               <p>Press <kbd className="px-1 py-0.5 bg-gray-800 rounded">↑</kbd> <kbd className="px-1 py-0.5 bg-gray-800 rounded">↓</kbd> for history</p>
               <p>Press <kbd className="px-1 py-0.5 bg-gray-800 rounded">Esc</kbd> to close</p>
             </div>

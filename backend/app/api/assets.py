@@ -1,6 +1,8 @@
 """Asset API endpoints."""
 
 import logging
+import platform
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -70,6 +72,20 @@ def clear_tags(
     return {"updated": updated}
 
 
+@router.delete("")
+def delete_assets(
+    update: AssetIdsUpdate,
+    disk: bool = Query(False, description="Also delete files from disk"),
+    service: AssetService = Depends(get_asset_service),
+):
+    """Delete assets from the database, optionally from disk too."""
+    if disk:
+        deleted = service.delete_assets(update.asset_ids)
+    else:
+        deleted = service.delete_assets_db_only(update.asset_ids)
+    return {"deleted": deleted}
+
+
 @router.get("/search")
 def search_assets(
     q: str = Query(..., description="Search query"),
@@ -96,6 +112,44 @@ def get_asset(
     asset["file_url"] = f"/api/assets/{asset_id}/file"
 
     return Asset(**asset)
+
+
+@router.delete("/by-path")
+def delete_assets_by_path(
+    path: str = Query(...),
+    service: AssetService = Depends(get_asset_service),
+):
+    """Delete assets by file path (or all assets under a directory)."""
+    deleted = service.delete_assets_by_path(path)
+    return {"deleted": deleted}
+
+
+@router.post("/{asset_id}/open")
+def open_in_explorer(
+    asset_id: str,
+    service: AssetService = Depends(get_asset_service),
+):
+    """Open the asset's location in the OS file explorer."""
+    asset = service.get_asset_by_id(asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    file_path = Path(asset["path"])
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on filesystem")
+
+    try:
+        system = platform.system()
+        if system == "Windows":
+            subprocess.Popen(["explorer", "/select,", str(file_path)])
+        elif system == "Darwin":
+            subprocess.Popen(["open", "-R", str(file_path)])
+        else:
+            subprocess.Popen(["xdg-open", str(file_path.parent)])
+        return {"status": "opened", "path": str(file_path)}
+    except Exception as e:
+        logger.error(f"Failed to open file location for {asset_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to open file location")
 
 
 @router.get("/{asset_id}/thumbnail")

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 
-export default function SearchBar({ onSearch, onTypeFilter, assets = [] }) {
+export default function SearchBar({ onSearch, assets = [] }) {
   const [query, setQuery] = useState('');
-  const [type, setType] = useState('');
   const [focused, setFocused] = useState(false);
   const [highlightedSuggestion, setHighlightedSuggestion] = useState(-1);
   const [recentQueries, setRecentQueries] = useState(() => {
@@ -94,10 +93,6 @@ export default function SearchBar({ onSearch, onTypeFilter, assets = [] }) {
   }, [query, onSearch]);
 
   useEffect(() => {
-    onTypeFilter(type);
-  }, [type, onTypeFilter]);
-
-  useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
         e.preventDefault();
@@ -152,16 +147,6 @@ export default function SearchBar({ onSearch, onTypeFilter, assets = [] }) {
             </button>
           )}
         </div>
-        
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-          className="bg-gray-900 text-gray-100 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-        >
-          <option value="">All Types</option>
-          <option value="image">Images</option>
-          <option value="video">Videos</option>
-        </select>
       </div>
     </div>
   );

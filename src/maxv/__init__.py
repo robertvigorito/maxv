@@ -1,0 +1,1 @@
+"""maxv command-line package."""
