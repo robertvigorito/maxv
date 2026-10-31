@@ -1,15 +1,17 @@
 """Indexing API endpoints."""
 
 import logging
+import os
 import platform
 import subprocess
 from pathlib import Path
+from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pymongo.database import Database
 
 from backend.app.config import settings
-from backend.app.db.mongodb import get_database
+from backend.app.db.mongodb import get_database, mongodb
 from backend.app.models.asset import ScanRequest, ScanResponse
 from backend.app.services.asset_service import AssetService
 from backend.app.services.scanner import MediaScanner
@@ -29,10 +31,10 @@ SCAN_STATE = {
 
 def get_asset_service(db: Database = Depends(get_database)) -> AssetService:
     """Dependency to get asset service."""
-    return AssetService(db)
+    return AssetService(db, mongodb.active_collection_name)
 
 
-def perform_scan(scan_path: Path, service: AssetService):
+def perform_scan(scan_path: Path, service: AssetService, project_id: Optional[str] = None):
     """Perform the actual scan operation, reporting progress via SCAN_STATE."""
     global SCAN_STATE
     SCAN_STATE = {
@@ -47,9 +49,70 @@ def perform_scan(scan_path: Path, service: AssetService):
         SCAN_STATE.update({"processed": processed, "total": total, "stats": stats})
 
     scanner = MediaScanner()
-    stats = scanner.scan_and_index(scan_path, service, recursive=True, progress_callback=progress)
+    stats = scanner.scan_and_index(
+        scan_path, service, recursive=True, progress_callback=progress, project_id=project_id
+    )
     SCAN_STATE.update({"status": "done", "stats": stats, "processed": SCAN_STATE["total"]})
     logger.info(f"Background scan completed for {scan_path}: {stats}")
+
+
+def _list_subdirectories(parent: Path) -> List[Path]:
+    """Return the immediate subdirectories of ``parent``, skipping errors."""
+    results = []
+    try:
+        for entry in parent.iterdir():
+            if entry.is_dir():
+                results.append(entry)
+    except (PermissionError, OSError):
+        pass
+    return results
+
+
+@router.get("/complete")
+def complete_path(
+    path: str = Query("", description="Partial path to complete (zsh-style)"),
+):
+    """Return directory completions for a partial filesystem path.
+
+    Mirrors tab-completion in a shell: an empty path lists the home directory,
+    a path ending in "/" lists that directory's subdirectories, and any other
+    partial lists the directories under its parent that share its prefix.
+    """
+    partial = path.strip()
+
+    # Expand a leading "~" to the user's home directory.
+    if partial.startswith("~"):
+        partial = str(Path.home()) + partial[1:]
+
+    # Resolve relative paths against the current working directory.
+    if partial and not partial.startswith("/"):
+        partial = str(Path.cwd() / partial)
+
+    if not partial:
+        items = [str(d) + os.sep for d in _list_subdirectories(Path.home())]
+        return {"items": sorted(items)[:100]}
+
+    target = Path(partial)
+
+    if partial.endswith(os.sep):
+        subdirs = _list_subdirectories(target)
+        items = [str(d) + os.sep for d in subdirs]
+    else:
+        parent = target.parent
+        prefix = target.name
+        subdirs = [d for d in _list_subdirectories(parent) if d.name.startswith(prefix)]
+        if target.is_dir():
+            # Include the fully-typed directory so Tab can descend into it.
+            subdirs.append(target)
+        items = [str(d) + os.sep for d in subdirs]
+
+    return {"items": sorted(items)[:100]}
+
+
+@router.get("/default")
+def default_scan_path():
+    """Default path for new scans: the last scanned path, else the server cwd."""
+    return {"path": SCAN_STATE.get("path") or str(Path.cwd())}
 
 
 @router.post("/scan", response_model=ScanResponse)
@@ -73,7 +136,7 @@ def scan_directory(
         raise HTTPException(status_code=400, detail=f"Path is not a directory: {request.path}")
 
     # Perform scan in background
-    background_tasks.add_task(perform_scan, scan_path, service)
+    background_tasks.add_task(perform_scan, scan_path, service, request.project_id)
 
     return ScanResponse(
         status="started",

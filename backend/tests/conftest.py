@@ -10,7 +10,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 # Set test environment
 os.environ["MONGODB_DB_NAME"] = "maxv_test"
 os.environ["MEDIA_PATH"] = "./test_data/media"
-os.environ["THUMBNAIL_PATH"] = "./test_data/thumbnails"
+os.environ["THUMBNAIL_PATH"] = str(Path(os.getenv("TMPDIR", "/tmp")) / "maxv-test-data" / "thumbnails")
 os.environ["CACHE_PATH"] = "./test_data/cache"
 
 

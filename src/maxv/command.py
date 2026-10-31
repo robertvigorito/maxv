@@ -1,6 +1,7 @@
 """Development commands for running maxv services."""
 
 import platform
+import shutil
 import signal
 import subprocess
 from pathlib import Path
@@ -13,6 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 KILL_PATTERNS = [
     "uvicorn backend.app.main:app",
     "vite",
+    "maxv-player",
 ]
 
 
@@ -34,6 +36,40 @@ def backend() -> None:
 def frontend() -> None:
     """Start the Vite frontend."""
     run_process(["npm", "run", "dev"], cwd=PROJECT_ROOT / "frontend")
+
+
+@app.command()
+def player() -> None:
+    """Build and start the native Rust/libVLC player."""
+    run_process(
+        ["cargo", "run", "--manifest-path", str(PROJECT_ROOT / "native/player/Cargo.toml"), "--"], cwd=PROJECT_ROOT
+    )
+
+
+@app.command()
+def start() -> None:
+    """Start MongoDB, the backend, and the frontend."""
+    if shutil.which("docker") is None:
+        raise typer.BadParameter("Docker is required to start MongoDB.")
+
+    existing = subprocess.run(
+        ["docker", "ps", "--filter", "name=maxv-mongo", "--filter", "status=running", "-q"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if not existing.stdout.strip():
+        container = subprocess.run(
+            ["docker", "compose", "up", "-d", "mongodb"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if container.returncode != 0:
+            typer.echo(container.stderr, err=True)
+            raise typer.Exit(container.returncode)
+
+    both()
 
 
 @app.command()

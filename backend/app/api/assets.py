@@ -10,9 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pymongo.database import Database
 
-from backend.app.db.mongodb import get_database
-from backend.app.models.asset import Asset, AssetIdsUpdate, AssetList, AssetTagsUpdate
+from backend.app.db.mongodb import get_database, mongodb
+from backend.app.models.asset import Asset, AssetIdsUpdate, AssetList, AssetRenameRequest, AssetTagsUpdate
 from backend.app.services.asset_service import AssetService
+from backend.app.services.thumbnails import ThumbnailGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -21,19 +22,21 @@ router = APIRouter(prefix="/api/assets", tags=["assets"])
 
 def get_asset_service(db: Database = Depends(get_database)) -> AssetService:
     """Dependency to get asset service."""
-    return AssetService(db)
+    return AssetService(db, mongodb.active_collection_name)
 
 
 @router.get("", response_model=AssetList)
 def list_assets(
     q: Optional[str] = Query(None, description="Search query"),
     type: Optional[str] = Query(None, description="Filter by asset type (image/video)"),
+    dir: Optional[str] = Query(None, description="Only assets under this directory"),
+    project_id: Optional[str] = Query(None, description="Only assets assigned to this project"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(100, ge=1, le=500, description="Items per page"),
     service: AssetService = Depends(get_asset_service),
 ):
     """List assets with pagination and optional filters."""
-    return service.list_assets(page=page, limit=limit, query=q, asset_type=type)
+    return service.list_assets(page=page, limit=limit, query=q, asset_type=type, directory=dir, project_id=project_id)
 
 
 @router.get("/tags")
@@ -86,6 +89,40 @@ def delete_assets(
     return {"deleted": deleted}
 
 
+@router.delete("/all")
+def clear_all_assets(
+    service: AssetService = Depends(get_asset_service),
+):
+    """Remove all assets from the database (files stay on disk)."""
+    deleted = service.clear_assets_db_only()
+    return {"deleted": deleted}
+
+
+@router.post("/plate")
+def plate_assets(
+    update: AssetIdsUpdate,
+    service: AssetService = Depends(get_asset_service),
+):
+    """Merge selected frame assets into single sequence assets (files stay on disk)."""
+    plated = service.plate_assets(update.asset_ids)
+    return {"plated": plated}
+
+
+@router.post("/rename")
+def rename_assets(
+    request: AssetRenameRequest,
+    service: AssetService = Depends(get_asset_service),
+):
+    """Rename selected indexed files, sequences, or media-bin directories."""
+    try:
+        renamed = service.rename_items([item.model_dump() for item in request.items])
+    except (ValueError, FileNotFoundError, FileExistsError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except OSError as error:
+        raise HTTPException(status_code=500, detail=f"Rename failed: {error}") from error
+    return {"renamed": renamed}
+
+
 @router.get("/search")
 def search_assets(
     q: str = Query(..., description="Search query"),
@@ -121,6 +158,16 @@ def delete_assets_by_path(
 ):
     """Delete assets by file path (or all assets under a directory)."""
     deleted = service.delete_assets_by_path(path)
+    return {"deleted": deleted}
+
+
+@router.delete("/by-path/db-only")
+def delete_assets_by_path_db_only(
+    path: str = Query(...),
+    service: AssetService = Depends(get_asset_service),
+):
+    """Delete assets by file path or directory while leaving files on disk."""
+    deleted = service.delete_assets_by_path_db_only(path)
     return {"deleted": deleted}
 
 
@@ -175,6 +222,38 @@ def get_thumbnail(
     )
 
 
+@router.get("/{asset_id}/preview")
+def get_preview(
+    asset_id: str,
+    service: AssetService = Depends(get_asset_service),
+):
+    """Browser-viewable full-size image; EXR files are rendered to a cached JPEG."""
+    asset = service.get_asset_by_id(asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    file_path = Path(asset["path"])
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on filesystem")
+
+    if file_path.suffix.lower() != ".exr":
+        return FileResponse(file_path, media_type=asset["mime"])
+
+    generator = ThumbnailGenerator()
+    cache_key = (asset.get("hash") or asset_id).replace(":", "_")
+    preview_path = generator.get_preview_path(cache_key)
+    if not preview_path.exists():
+        preview_path.parent.mkdir(parents=True, exist_ok=True)
+        if not generator.generate_exr_preview(file_path, preview_path):
+            raise HTTPException(status_code=500, detail="Failed to render EXR preview")
+
+    return FileResponse(
+        preview_path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=31536000"},
+    )
+
+
 @router.get("/{asset_id}/file")
 def get_file(
     asset_id: str,
@@ -202,6 +281,7 @@ def get_file(
             file_path,
             media_type=asset["mime"],
             filename=asset["filename"],
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
         )
 
     # Parse Range header (format: "bytes=start-end")
@@ -227,7 +307,7 @@ def get_file(
             with open(file_path, "rb") as f:
                 f.seek(start)
                 remaining = content_length
-                chunk_size = 65536  # 64KB chunks
+                chunk_size = 1024 * 1024  # Keep disk and network reads efficient for large media.
 
                 while remaining > 0:
                     chunk = f.read(min(chunk_size, remaining))
@@ -241,6 +321,7 @@ def get_file(
             "Accept-Ranges": "bytes",
             "Content-Length": str(content_length),
             "Content-Type": asset["mime"],
+            "Cache-Control": "public, max-age=31536000, immutable",
         }
 
         return StreamingResponse(

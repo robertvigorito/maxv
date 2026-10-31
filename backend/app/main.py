@@ -6,9 +6,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.api import assets, index
+from backend.app.api import assets, index, projects, settings as settings_api, watches
 from backend.app.config import settings
 from backend.app.db.mongodb import mongodb
+from backend.app.services.watch_service import watch_manager
 
 # Configure logging
 logging.basicConfig(
@@ -32,10 +33,14 @@ async def lifespan(app: FastAPI):
     # Connect to MongoDB
     mongodb.connect()
 
+    # Start the folder watch manager (loads watches and begins polling).
+    watch_manager.start(mongodb.db)
+
     yield
 
     # Shutdown
     logger.info("Shutting down maxv backend...")
+    watch_manager.stop()
     mongodb.disconnect()
 
 
@@ -59,6 +64,9 @@ app.add_middleware(
 # Include routers
 app.include_router(assets.router)
 app.include_router(index.router)
+app.include_router(watches.router)
+app.include_router(settings_api.router)
+app.include_router(projects.router)
 
 
 @app.get("/")

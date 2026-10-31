@@ -44,6 +44,58 @@
 - Node.js 18+ (for frontend)
 - `uv` Python package manager
 
+### Start MongoDB with Docker Compose
+
+Make sure Docker is installed and the Docker daemon is running. Verify it with:
+
+```bash
+docker info
+```
+
+Start MongoDB from the repository root. Docker Compose creates the MongoDB
+container and a persistent `mongodb_data` volume on the first run:
+
+```bash
+docker compose up -d mongodb
+```
+
+If you previously created a `maxv-mongo` container with `docker run` and it is
+already running, it can continue to provide MongoDB on port `27017`. To move
+to the Compose-managed container, stop and remove that old container first:
+
+```bash
+docker stop maxv-mongo
+docker rm maxv-mongo
+docker compose up -d mongodb
+```
+
+The old container's data is not automatically copied to the Compose volume.
+
+Start the existing container on later runs with the same command:
+
+```bash
+docker compose start mongodb
+```
+
+Check that MongoDB is ready:
+
+```bash
+docker compose exec mongodb mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'
+```
+
+To start MongoDB, the backend, and the frontend together after installing the
+project dependencies, use:
+
+```bash
+uv run maxv start
+```
+
+Stop the Compose service and keep its data volume:
+
+```bash
+docker compose stop mongodb
+```
+
 ### Backend Setup
 
 ```bash
@@ -56,11 +108,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # 3. Install Python dependencies
 uv sync
 
-# 4. Start MongoDB (using Docker)
-docker run -d -p 27017:27017 --name maxv-mongo mongo:latest
-
-# Or start local MongoDB
-# mongod --dbpath /path/to/data
+# 4. Start MongoDB using Docker Compose (see the detailed instructions above)
+docker compose up -d mongodb
 
 # 5. Create .env file (copy from .env.example)
 cp .env.example .env
@@ -310,13 +359,13 @@ Assets are stored with the following structure:
 
 ```bash
 # Check if MongoDB is running
-docker ps | grep maxv-mongo
+docker compose ps
 
 # View MongoDB logs
-docker logs maxv-mongo
+docker compose logs mongodb
 
 # Connect to MongoDB shell
-docker exec -it maxv-mongo mongosh
+docker compose exec mongodb mongosh
 ```
 
 ### FFmpeg Not Found

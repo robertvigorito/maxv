@@ -7,7 +7,7 @@ export default function ImageViewer({ asset }) {
   return (
     <div className="max-w-full max-h-full flex items-center justify-center">
       <img
-        src={api.getFileUrl(asset._id)}
+        src={api.getImageUrl(asset)}
         alt={asset.filename}
         className={`${
           fitToScreen

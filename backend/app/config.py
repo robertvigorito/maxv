@@ -1,10 +1,26 @@
 """Application configuration management."""
 
 import os
+import sys
 from pathlib import Path
 from typing import List
 
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def user_cache_dir() -> Path:
+    """Return maxv's per-user cache directory, outside the installed package."""
+    if os.name == "nt":
+        return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "maxv" / "Cache"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Caches" / "maxv"
+    return Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "maxv"
+
+
+def default_thumbnail_path() -> Path:
+    """Store generated thumbnails in the user's cache, never in the package tree."""
+    return user_cache_dir() / "thumbnails"
 
 
 class Settings(BaseSettings):
@@ -16,7 +32,7 @@ class Settings(BaseSettings):
 
     # Media Configuration
     media_path: Path = Path("./data/media")
-    thumbnail_path: Path = Path("./data/thumbnails")
+    thumbnail_path: Path = Field(default_factory=default_thumbnail_path)
     cache_path: Path = Path("./data/cache")
 
     # Thumbnail Settings
@@ -24,7 +40,7 @@ class Settings(BaseSettings):
     thumbnail_quality: int = 85
 
     # Supported file extensions
-    supported_image_extensions: List[str] = [".jpg", ".jpeg", ".png"]
+    supported_image_extensions: List[str] = [".jpg", ".jpeg", ".png", ".exr"]
     supported_video_extensions: List[str] = [".mov"]
 
     # API Configuration
@@ -43,6 +59,15 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
+
+    @field_validator("thumbnail_path", mode="before")
+    @classmethod
+    def resolve_thumbnail_path(cls, value: Path | str) -> Path:
+        """Resolve relative overrides under the user cache, not the current directory."""
+        path = Path(value).expanduser()
+        if not path.is_absolute():
+            path = user_cache_dir() / path
+        return path.resolve()
 
     @property
     def all_supported_extensions(self) -> List[str]:

@@ -1,5 +1,17 @@
 # React + Vite
 
+## Development runtime
+
+This frontend requires Node.js 20.19 or newer because it uses Vite 8. Use Node.js 22.14.0 for the project:
+
+```bash
+nvm use
+npm install
+npm run dev
+```
+
+If `nvm` is not installed, install Node.js 22.14.0 or newer before running the frontend.
+
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
 Currently, two official plugins are available:

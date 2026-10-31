@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import MediaTree from './MediaTree';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 function Section({ title, open, onToggle, children }) {
   return (
@@ -19,9 +20,10 @@ function Section({ title, open, onToggle, children }) {
 
 export const UNTAGGED = '__untagged__';
 
-export default function FilterPanel({ tags, activeTags, onToggleTag, groupBy, onGroupBy, onClearFilters, onClearAllFilters, collapsed, onToggleCollapse, sizeFilter, onSizeFilter, fileSizeFilters, onFileSizeFilter, untaggedCount = 0, extensions = [], extensionFilter, onExtensionFilter, thumbnailSize, onThumbnailSize, thumbnailWidth, onThumbnailWidth, mediaTree, onItemContextMenu, tab, onTabChange, revealPath }) {
-  const [openSections, setOpenSections] = useState({ tags: true, size: true, fileSize: true, extension: true, group: true, thumbnail: true });
-  const [width, setWidth] = useState(256);
+export default function FilterPanel({ tags, activeTags, onToggleTag, groupBy, onGroupBy, onClearFilters, onClearAllFilters, collapsed, onToggleCollapse, sizeFilter, onSizeFilter, fileSizeFilters, onFileSizeFilter, untaggedCount = 0, extensions = [], extensionFilter, onExtensionFilter, thumbnailSize, onThumbnailSize, thumbnailWidth, onThumbnailWidth, mediaTree, onItemContextMenu, onFilterFolder, tab, onTabChange, revealPath, expandSelection, onSelectionChange }) {
+  const [openSections, setOpenSections] = useLocalStorage('maxv-filter-open-sections', { tags: true, size: true, fileSize: true, extension: true, group: true, thumbnail: true });
+  const [width, setWidth] = useLocalStorage('maxv-filter-panel-width', 256);
+  const [mediaSignal, setMediaSignal] = useState({ type: null, nonce: 0 });
   const resizingRef = useRef(false);
 
   const toggleSection = (name) => setOpenSections((current) => ({ ...current, [name]: !current[name] }));
@@ -75,6 +77,30 @@ export default function FilterPanel({ tags, activeTags, onToggleTag, groupBy, on
               Clear all
             </button>
           )}
+          {tab === 'media' && (
+            <>
+              <button
+                type="button"
+                onClick={() => setMediaSignal({ type: 'expand', nonce: Date.now() })}
+                title="Expand all"
+                className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:bg-gray-800 hover:text-white"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 13l5 5 5-5M7 6l5 5 5-5" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMediaSignal({ type: 'collapse', nonce: Date.now() })}
+                title="Collapse all"
+                className="flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:bg-gray-800 hover:text-white"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 11l5-5 5 5M7 18l5-5 5 5" />
+                </svg>
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={onToggleCollapse}
@@ -109,7 +135,15 @@ export default function FilterPanel({ tags, activeTags, onToggleTag, groupBy, on
 
       {tab === 'media' && (
         <div className="min-h-0 flex-1">
-          <MediaTree root={mediaTree} onItemContextMenu={onItemContextMenu} revealPath={revealPath} />
+          <MediaTree
+            root={mediaTree}
+            onItemContextMenu={onItemContextMenu}
+            revealPath={revealPath}
+            onFilterFolder={onFilterFolder}
+            groupSignal={mediaSignal}
+            expandSelection={expandSelection}
+            onSelectionChange={onSelectionChange}
+          />
         </div>
       )}
 

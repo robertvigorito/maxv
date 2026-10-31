@@ -1,7 +1,7 @@
 """Tests for the media scanner service."""
 
-import hashlib
 from pathlib import Path
+import shutil
 
 import pytest
 
@@ -18,6 +18,7 @@ class TestMediaScanner:
         assert scanner.is_supported_file(Path("test.jpg"))
         assert scanner.is_supported_file(Path("test.jpeg"))
         assert scanner.is_supported_file(Path("test.png"))
+        assert scanner.is_supported_file(Path("test.exr"))
         assert scanner.is_supported_file(Path("test.mov"))
         assert scanner.is_supported_file(Path("TEST.JPG"))  # Case insensitive
 
@@ -36,7 +37,7 @@ class TestMediaScanner:
         assert not scanner.is_video_file(Path("test.png"))
 
     def test_calculate_file_hash(self, test_media_dir):
-        """Test file hash calculation."""
+        """Test fast file hash calculation."""
         scanner = MediaScanner()
 
         # Create a test file
@@ -49,9 +50,12 @@ class TestMediaScanner:
         # Verify format
         assert file_hash.startswith("sha256:")
 
-        # Verify hash is consistent
-        expected_hash = hashlib.sha256(b"Hello, World!").hexdigest()
-        assert file_hash == f"sha256:{expected_hash}"
+        # Verify hash is deterministic for the same file
+        assert scanner.calculate_file_hash(test_file) == file_hash
+
+        # Verify hash changes when the content changes
+        test_file.write_text("Hello, World! 2")
+        assert scanner.calculate_file_hash(test_file) != file_hash
 
     def test_scan_directory(self, test_media_dir):
         """Test directory scanning."""
@@ -98,6 +102,24 @@ class TestMediaScanner:
         # Should only find top-level file
         assert len(files) == 1
         assert files[0].name == "image1.jpg"
+
+    def test_scan_exr_sequence_fixture(self, test_media_dir):
+        """Discover the committed EXR sequence and standalone image fixture."""
+        fixture_dir = Path(__file__).parent / "fixtures" / "exr"
+        for fixture in fixture_dir.glob("*.exr"):
+            shutil.copy2(fixture, test_media_dir / fixture.name)
+
+        scanner = MediaScanner()
+        media_files = scanner.scan_directory(test_media_dir)
+        sequences, standalone = scanner._group_sequences(media_files)
+
+        assert len(media_files) == 4
+        assert len(sequences) == 1
+        assert sequences[0]["pattern"] == "beauty.%04d.exr"
+        assert sequences[0]["count"] == 3
+        assert sequences[0]["start"] == 1
+        assert sequences[0]["end"] == 3
+        assert [path.name for path in standalone] == ["still.exr"]
 
 
 if __name__ == "__main__":

@@ -17,13 +17,13 @@ input[type="range"].slider::-webkit-slider-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #a855f7;
+  background: var(--color-purple-500);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 input[type="range"].slider::-webkit-slider-thumb:hover {
-  background: #9333ea;
+  background: var(--color-purple-600);
   transform: scale(1.2);
 }
 
@@ -31,21 +31,21 @@ input[type="range"].slider::-moz-range-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #a855f7;
+  background: var(--color-purple-500);
   cursor: pointer;
   border: none;
   transition: all 0.2s;
 }
 
 input[type="range"].slider::-moz-range-thumb:hover {
-  background: #9333ea;
+  background: var(--color-purple-600);
   transform: scale(1.2);
 }
 
 /* Modern purple scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #9333ea #1e1b2e;
+  scrollbar-color: var(--color-purple-600) var(--color-gray-900);
 }
 
 *::-webkit-scrollbar {
@@ -54,20 +54,113 @@ input[type="range"].slider::-moz-range-thumb:hover {
 }
 
 *::-webkit-scrollbar-track {
-  background: #1e1b2e;
+  background: var(--color-gray-900);
   border-radius: 8px;
 }
 
 *::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #a855f7, #9333ea);
+  background: linear-gradient(180deg, var(--color-purple-500), var(--color-purple-600));
   border-radius: 8px;
-  border: 2px solid #1e1b2e;
+  border: 2px solid var(--color-gray-900);
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #c084fc, #a855f7);
+  background: linear-gradient(180deg, var(--color-purple-400), var(--color-purple-500));
 }
 
 *::-webkit-scrollbar-corner {
-  background: #1e1b2e;
+  background: var(--color-gray-900);
+}
+
+/* Color themes: override Tailwind's palette variables (see src/theme.js). */
+:root[data-theme="slate"] {
+  --color-gray-50: #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-200: #e2e8f0;
+  --color-gray-300: #cbd5e1;
+  --color-gray-400: #94a3b8;
+  --color-gray-500: #64748b;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1e293b;
+  --color-gray-900: #0f172a;
+  --color-gray-950: #020617;
+}
+
+:root[data-theme="graphite"] {
+  --color-gray-50: #fafafa;
+  --color-gray-100: #f5f5f5;
+  --color-gray-200: #e5e5e5;
+  --color-gray-300: #d4d4d4;
+  --color-gray-400: #a3a3a3;
+  --color-gray-500: #737373;
+  --color-gray-600: #525252;
+  --color-gray-700: #404040;
+  --color-gray-800: #262626;
+  --color-gray-900: #171717;
+  --color-gray-950: #0a0a0a;
+}
+
+:root[data-theme="mocha"] {
+  --color-gray-50: #fafaf9;
+  --color-gray-100: #f5f5f4;
+  --color-gray-200: #e7e5e4;
+  --color-gray-300: #d6d3d1;
+  --color-gray-400: #a8a29e;
+  --color-gray-500: #78716c;
+  --color-gray-600: #57534e;
+  --color-gray-700: #44403c;
+  --color-gray-800: #292524;
+  --color-gray-900: #1c1917;
+  --color-gray-950: #0c0a09;
+}
+
+:root[data-theme="black"] {
+  --color-gray-50: #fafafa;
+  --color-gray-100: #f5f5f5;
+  --color-gray-200: #e5e5e5;
+  --color-gray-300: #d4d4d4;
+  --color-gray-400: #a3a3a3;
+  --color-gray-500: #737373;
+  --color-gray-600: #3f3f3f;
+  --color-gray-700: #262626;
+  --color-gray-800: #171717;
+  --color-gray-900: #0a0a0a;
+  --color-gray-950: #000000;
+}
+
+:root[data-accent="sky"] {
+  --color-purple-200: #bae6fd;
+  --color-purple-300: #7dd3fc;
+  --color-purple-400: #38bdf8;
+  --color-purple-500: #0ea5e9;
+  --color-purple-600: #0284c7;
+  --color-purple-700: #0369a1;
+}
+
+:root[data-accent="emerald"] {
+  --color-purple-200: #a7f3d0;
+  --color-purple-300: #6ee7b7;
+  --color-purple-400: #34d399;
+  --color-purple-500: #10b981;
+  --color-purple-600: #059669;
+  --color-purple-700: #047857;
+}
+
+:root[data-accent="rose"] {
+  --color-purple-200: #fecdd3;
+  --color-purple-300: #fda4af;
+  --color-purple-400: #fb7185;
+  --color-purple-500: #f43f5e;
+  --color-purple-600: #e11d48;
+  --color-purple-700: #be123c;
+}
+
+:root[data-accent="amber"] {
+  --color-purple-200: #fde68a;
+  --color-purple-300: #fcd34d;
+  --color-purple-400: #fbbf24;
+  --color-purple-500: #f59e0b;
+  --color-purple-600: #d97706;
+  --color-purple-700: #b45309;
 }

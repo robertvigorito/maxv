@@ -38,6 +38,11 @@ class AssetBase(BaseModel):
     hash: str = Field(..., description="SHA256 hash of the file")
     metadata: AssetMetadata = Field(default_factory=AssetMetadata, description="Additional metadata")
     tags: List[str] = Field(default_factory=list, description="User-defined tags")
+    is_sequence: bool = Field(False, description="True when this asset is a frame sequence")
+    frame_count: Optional[int] = Field(None, description="Number of frames in a sequence")
+    frame_start: Optional[int] = Field(None, description="First frame number of a sequence")
+    frame_end: Optional[int] = Field(None, description="Last frame number of a sequence")
+    sequence_pattern: Optional[str] = Field(None, description="Frame pattern, e.g. frame.%04d.png")
 
 
 class AssetCreate(AssetBase):
@@ -78,6 +83,7 @@ class ScanRequest(BaseModel):
     """Request to scan a directory."""
 
     path: str = Field(..., description="Directory path to scan")
+    project_id: Optional[str] = Field(None, description="Project to add the scanned assets to")
 
 
 class ScanResponse(BaseModel):
@@ -103,3 +109,16 @@ class AssetIdsUpdate(BaseModel):
     """A set of asset IDs to operate on."""
 
     asset_ids: list[str] = Field(..., min_length=1)
+
+
+class AssetRenameItem(BaseModel):
+    """One indexed file or directory rename operation."""
+
+    path: str = Field(..., min_length=1)
+    new_name: str = Field(..., min_length=1)
+
+
+class AssetRenameRequest(BaseModel):
+    """A batch of rename operations for indexed files or media-bin folders."""
+
+    items: list[AssetRenameItem] = Field(..., min_length=1)

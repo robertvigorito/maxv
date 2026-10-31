@@ -48,6 +48,9 @@ frontend/dist/
 frontend/.vite/
 frontend/package-lock.json
 
+# Native player
+native/player/target/
+
 # OS
 .DS_Store
 Thumbs.db

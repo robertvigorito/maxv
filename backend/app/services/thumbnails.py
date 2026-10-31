@@ -24,9 +24,59 @@ class ThumbnailGenerator:
         """Get thumbnail path for a given file hash."""
         return self.thumbnail_path / f"{file_hash}.jpg"
 
+    def get_preview_path(self, file_hash: str) -> Path:
+        """Get the full-size browser-viewable preview path for a given file hash."""
+        return self.thumbnail_path / f"preview_{file_hash}.jpg"
+
+    def generate_exr_preview(self, source_path: Path, preview_path: Path, max_dimension: int = 4096) -> bool:
+        """Render an EXR to a display-referred (sRGB) JPEG that browsers can show."""
+        try:
+            import numpy as np
+            import OpenEXR
+
+            with OpenEXR.File(str(source_path)) as exr_file:
+                channels = exr_file.channels()
+                channel = channels.get("RGB") or channels.get("RGBA")
+                if channel is None:
+                    channel = next(iter(channels.values()))
+                pixels = np.asarray(channel.pixels, dtype=np.float32)
+            if pixels.ndim == 2:
+                pixels = np.repeat(pixels[:, :, None], 3, axis=2)
+            pixels = np.nan_to_num(pixels[:, :, :3], nan=0.0, posinf=1.0, neginf=0.0)
+            pixels = np.clip(pixels, 0.0, 1.0)
+            # Linear -> sRGB transfer function.
+            pixels = np.where(pixels <= 0.0031308, pixels * 12.92, 1.055 * np.power(pixels, 1 / 2.4) - 0.055)
+            img = Image.fromarray((np.clip(pixels, 0.0, 1.0) * 255).astype(np.uint8), mode="RGB")
+            img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+            img.save(preview_path, "JPEG", quality=92)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to generate EXR preview for {source_path}: {e}")
+            return False
+
     def generate_image_thumbnail(self, source_path: Path, thumbnail_path: Path) -> bool:
         """Generate thumbnail for an image file."""
         try:
+            if source_path.suffix.lower() == ".exr":
+                import numpy as np
+                import OpenEXR
+
+                with OpenEXR.File(str(source_path)) as exr_file:
+                    channels = exr_file.channels()
+                    channel = channels.get("RGB") or channels.get("RGBA")
+                    if channel is None:
+                        channel = next(iter(channels.values()))
+                    pixels = np.asarray(channel.pixels)
+                    if pixels.ndim == 2:
+                        pixels = np.repeat(pixels[:, :, None], 3, axis=2)
+                    pixels = np.nan_to_num(pixels[:, :, :3], nan=0.0, posinf=1.0, neginf=0.0)
+                    pixels = np.clip(pixels, 0.0, 1.0)
+                    img = Image.fromarray((pixels * 255).astype(np.uint8), mode="RGB")
+                    img.thumbnail((self.max_size, self.max_size), Image.Resampling.LANCZOS)
+                    img.save(thumbnail_path, "JPEG", quality=self.quality, optimize=True)
+                logger.debug(f"Generated EXR thumbnail: {thumbnail_path}")
+                return True
+
             with Image.open(source_path) as img:
                 # Convert to RGB if necessary (for PNG with transparency)
                 if img.mode in ("RGBA", "LA", "P"):

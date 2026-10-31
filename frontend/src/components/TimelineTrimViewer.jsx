@@ -8,17 +8,20 @@ function format(t) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export default function TimelineTrimViewer({ asset, initialIn = 0, initialOut = null, onSave, onClose }) {
+export default function TimelineTrimViewer({ asset, initialIn = 0, initialOut = null, imageDuration = 3, onSave, onClose }) {
   const videoRef = useRef(null);
   const [inTime, setInTime] = useState(initialIn);
-  const [outTime, setOutTime] = useState(initialOut);
-  const [duration, setDuration] = useState(0);
+  const [outTime, setOutTime] = useState(initialOut ?? (asset.type === 'image' ? imageDuration : null));
+  const [duration, setDuration] = useState(asset.type === 'image' ? imageDuration : 0);
   const [current, setCurrent] = useState(initialIn);
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (asset.type === 'image') {
+      return undefined;
+    }
+    if (!video) return undefined;
     const onLoaded = () => {
       setDuration(video.duration || 0);
       setOutTime((prev) => (prev == null ? video.duration : prev));
@@ -26,12 +29,13 @@ export default function TimelineTrimViewer({ asset, initialIn = 0, initialOut = 
     };
     video.addEventListener('loadedmetadata', onLoaded);
     return () => video.removeEventListener('loadedmetadata', onLoaded);
-  }, [initialIn]);
+  }, [asset.type, imageDuration, initialIn]);
 
   // Keep the playhead synced and loop between in/out while playing.
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (asset.type === 'image') return undefined;
+    if (!video) return undefined;
     const onTime = () => {
       setCurrent(video.currentTime);
       if (playing && outTime != null && video.currentTime >= outTime) {
@@ -40,7 +44,7 @@ export default function TimelineTrimViewer({ asset, initialIn = 0, initialOut = 
     };
     video.addEventListener('timeupdate', onTime);
     return () => video.removeEventListener('timeupdate', onTime);
-  }, [playing, inTime, outTime]);
+  }, [asset.type, playing, inTime, outTime]);
 
   const seek = (value) => {
     const t = Number(value);
@@ -50,6 +54,10 @@ export default function TimelineTrimViewer({ asset, initialIn = 0, initialOut = 
 
   const togglePlay = () => {
     const video = videoRef.current;
+    if (asset.type === 'image') {
+      setPlaying((value) => !value);
+      return;
+    }
     if (!video) return;
     if (video.paused) {
       if (video.currentTime < inTime || video.currentTime >= (outTime ?? video.duration)) {
@@ -79,13 +87,21 @@ export default function TimelineTrimViewer({ asset, initialIn = 0, initialOut = 
       </div>
 
       <div className="flex flex-1 items-center justify-center p-4">
-        <video
-          ref={videoRef}
-          src={api.getFileUrl(asset._id)}
-          controls
-          preload="auto"
-          className="max-w-[90vw] max-h-[65vh] object-contain rounded-lg"
-        />
+        {asset.type === 'image' ? (
+          <img
+            src={api.getImageUrl(asset)}
+            alt={asset.filename}
+            className="max-w-[90vw] max-h-[65vh] object-contain rounded-lg"
+          />
+        ) : (
+          <video
+            ref={videoRef}
+            src={api.getFileUrl(asset._id)}
+            controls
+            preload="auto"
+            className="max-w-[90vw] max-h-[65vh] object-contain rounded-lg"
+          />
+        )}
       </div>
 
       {/* Smooth scrub bar with in/out markers */}

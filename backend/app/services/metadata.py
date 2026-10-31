@@ -35,6 +35,20 @@ class MetadataExtractor:
                     "type": AssetType.IMAGE,
                 }
         except Exception as e:
+            if file_path.suffix.lower() == ".exr":
+                try:
+                    import OpenEXR
+
+                    with OpenEXR.File(str(file_path)) as exr_file:
+                        window_min, window_max = exr_file.header()["dataWindow"]
+                        return {
+                            "width": int(window_max[0] - window_min[0] + 1),
+                            "height": int(window_max[1] - window_min[1] + 1),
+                            "mime": "image/x-exr",
+                            "type": AssetType.IMAGE,
+                        }
+                except Exception as exr_error:
+                    logger.error(f"Failed to read EXR metadata from {file_path}: {exr_error}")
             logger.error(f"Failed to extract image metadata from {file_path}: {e}")
             return {
                 "width": None,

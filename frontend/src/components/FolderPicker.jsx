@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api/client';
 
-export default function FolderPicker({ onScanComplete }) {
+export default function FolderPicker({ onScanComplete, projectId = '' }) {
   const [folderPath, setFolderPath] = useState('');
   const [scanning, setScanning] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -18,7 +18,7 @@ export default function FolderPicker({ onScanComplete }) {
       setScanning(true);
       setError('');
       setInfo('');
-      await api.triggerScan(path);
+      await api.triggerScan(path, projectId);
       
       // Poll for completion
       let attempts = 0;
