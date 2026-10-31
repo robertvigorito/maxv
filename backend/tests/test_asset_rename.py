@@ -23,16 +23,18 @@ def service():
 
 
 def _insert_asset(service, path, **extra):
-    return service.collection.insert_one({
-        "path": str(path),
-        "filename": path.name,
-        "type": "image",
-        "mime": "image/png",
-        "size": 1,
-        "modified_at": datetime.utcnow(),
-        "hash": "test-hash",
-        **extra,
-    }).inserted_id
+    return service.collection.insert_one(
+        {
+            "path": str(path),
+            "filename": path.name,
+            "type": "image",
+            "mime": "image/png",
+            "size": 1,
+            "modified_at": datetime.utcnow(),
+            "hash": "test-hash",
+            **extra,
+        }
+    ).inserted_id
 
 
 def test_rename_file_updates_path_and_filename(service, tmp_path):

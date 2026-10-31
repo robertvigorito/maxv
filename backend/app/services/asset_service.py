@@ -229,10 +229,12 @@ class AssetService:
 
             if source.is_dir():
                 target = source.with_name(new_name)
-                descendants = list(self.collection.find(
-                    {"path": {"$regex": f"^{re.escape(str(source))}(/|\\\\)"}},
-                    {"_id": 1, "path": 1},
-                ))
+                descendants = list(
+                    self.collection.find(
+                        {"path": {"$regex": f"^{re.escape(str(source))}(/|\\\\)"}},
+                        {"_id": 1, "path": 1},
+                    )
+                )
                 if not descendants:
                     raise ValueError(f"Directory contains no indexed media: {source}")
                 plans.append({"kind": "directory", "source": source, "target": target, "docs": descendants})
@@ -260,31 +262,34 @@ class AssetService:
                 if not frame_plans:
                     raise FileNotFoundError(f"No sequence frames found for: {source}")
                 target = source.parent / f"{new_name}.{first_frame:0{width}d}{extension}"
-                plans.append({
-                    "kind": "sequence", "source": source, "target": target, "doc": doc,
-                    "frames": frame_plans, "filename": f"{new_name}.%0{width}d{extension}",
-                })
+                plans.append(
+                    {
+                        "kind": "sequence",
+                        "source": source,
+                        "target": target,
+                        "doc": doc,
+                        "frames": frame_plans,
+                        "filename": f"{new_name}.%0{width}d{extension}",
+                    }
+                )
                 target_paths.update(str(dest) for _, dest in frame_plans)
             else:
                 target = source.with_name(new_name + source.suffix)
                 plans.append({"kind": "file", "source": source, "target": target, "doc": doc})
                 target_paths.add(str(target))
 
-        if len(target_paths) != sum(
-            len(plan["frames"]) if plan["kind"] == "sequence" else 1 for plan in plans
-        ):
+        if len(target_paths) != sum(len(plan["frames"]) if plan["kind"] == "sequence" else 1 for plan in plans):
             raise ValueError("Two selected items would have the same destination name")
 
         # Reject overlapping folder selections and destinations that would overwrite
         # anything other than another selected source (which is still rejected below).
         directories = [plan["source"] for plan in plans if plan["kind"] == "directory"]
         for i, directory in enumerate(directories):
-            if any(other != directory and directory in other.parents for other in directories[:i] + directories[i + 1 :]):
-                raise ValueError("Do not select a folder and one of its subfolders together")
             if any(
-                plan["kind"] != "directory" and directory in plan["source"].parents
-                for plan in plans
+                other != directory and directory in other.parents for other in directories[:i] + directories[i + 1 :]
             ):
+                raise ValueError("Do not select a folder and one of its subfolders together")
+            if any(plan["kind"] != "directory" and directory in plan["source"].parents for plan in plans):
                 raise ValueError("Do not select a folder and files inside it together")
         for plan in plans:
             destinations = [plan["target"]] if plan["kind"] != "sequence" else [dest for _, dest in plan["frames"]]
@@ -313,18 +318,28 @@ class AssetService:
                 if plan["kind"] == "directory":
                     old_root, new_root = str(plan["source"]), str(plan["target"])
                     for doc in plan["docs"]:
-                        new_path = new_root + doc["path"][len(old_root):]
+                        new_path = new_root + doc["path"][len(old_root) :]
                         updates.append(UpdateOne({"_id": doc["_id"]}, {"$set": {"path": new_path}}))
                 elif plan["kind"] == "sequence":
-                    updates.append(UpdateOne(
-                        {"_id": plan["doc"]["_id"]},
-                        {"$set": {"path": str(plan["target"]), "filename": plan["filename"], "sequence_pattern": plan["filename"]}},
-                    ))
+                    updates.append(
+                        UpdateOne(
+                            {"_id": plan["doc"]["_id"]},
+                            {
+                                "$set": {
+                                    "path": str(plan["target"]),
+                                    "filename": plan["filename"],
+                                    "sequence_pattern": plan["filename"],
+                                }
+                            },
+                        )
+                    )
                 else:
-                    updates.append(UpdateOne(
-                        {"_id": plan["doc"]["_id"]},
-                        {"$set": {"path": str(plan["target"]), "filename": plan["target"].name}},
-                    ))
+                    updates.append(
+                        UpdateOne(
+                            {"_id": plan["doc"]["_id"]},
+                            {"$set": {"path": str(plan["target"]), "filename": plan["target"].name}},
+                        )
+                    )
             if updates:
                 self.collection.bulk_write(updates, ordered=True)
         except Exception:
